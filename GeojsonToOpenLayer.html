@@ -11,6 +11,33 @@
 </head>
 
 <body>
+    <select id="layer-select" class="form-control m-1 p-0 h-0">
+        <option value="Aerial">Aerial</option>
+        <option value="AerialWithLabels">Aerial with labels</option>
+        <option value="Road">Road (static)</option>
+        <option value="RoadOnDemand" selected>Road (dynamic)</option>
+        <option value="collinsBart">Collins Bart</option>
+        <!-- <option value="ordnanceSurvey">Ordnance Survey</option> -->
+    </select>
+
+    <div id="checkboxes">
+        <% @map_layers.each_with_index do |layer| %>
+            <label class="checkbox-inline mr-3"><input type="checkbox" value=0 onChange="updateLayers(this)"
+                checked><%= layer.name %></label>
+        <% end %>
+        <label class="checkbox-inline mr-3"><input type="checkbox" value=0 onChange="updateLayers(this)"
+            checked>Household</label>
+        <label class="checkbox-inline mr-3"><input type="checkbox" value=1
+            onChange="updateLayers(this)">Services</label>
+        <label class="checkbox-inline mr-3"><input type="checkbox" value=2
+            onChange="updateLayers(this)">Road</label>
+        <label class="checkbox-inline mr-3"><input type="checkbox" value=3 onChange="updateLayers(this)"
+            checked>Ward Boundary</label>
+        <label class="checkbox-inline mr-3"><input type="checkbox" value=4 onChange="updateLayers(this)">Land
+        Use</label>
+        <label class="checkbox-inline mr-3"><input type="checkbox" value=5 onChange="updateLayers(this)">Place
+        Name</label>
+    </div>
     <div id="map" class="map">
 
     </div>
@@ -19,6 +46,228 @@
 </html>
 
 <script>
+
+
+var images = {
+  School: 'https://cdn1.iconfinder.com/data/icons/2-building-line-filled/614/School-256.png',
+  Temple: 'https://cdn1.iconfinder.com/data/icons/2-building-line-filled/614/Temple-256.png',
+  Health_post: 'https://cdn4.iconfinder.com/data/icons/hospital-19/512/3_hospital-256.png',
+  Water_Tank: 'https://cdn2.iconfinder.com/data/icons/circle-icons-1/64/water-256.png',
+  Bridge: 'https://cdn0.iconfinder.com/data/icons/city-elements-flaticon/64/river-bridge-architecture_and_city-architectonic-engineering-buildings-landscape-256.png',
+  others: 'https://cdn0.iconfinder.com/data/icons/twitter-23/512/157_Twitter_Location_Map-256.png'
+}
+
+var markserStyles = {
+  School: new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn1.iconfinder.com/data/icons/2-building-line-filled/614/School-256.png',
+      scale: 0.1,
+      opacity: 1,
+    }))
+  }),
+  Temple: new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn1.iconfinder.com/data/icons/2-building-line-filled/614/Temple-256.png',
+      scale: 0.1,
+      opacity: 1,
+    }))
+  }),
+  Health_post: new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn4.iconfinder.com/data/icons/hospital-19/512/3_hospital-256.png',
+      scale: 0.1,
+      opacity: 1,
+    }))
+  }),
+
+  Water_Tank: new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn2.iconfinder.com/data/icons/circle-icons-1/64/water-256.png',
+      scale: 0.1,
+      opacity: 1,
+    }))
+  }),
+
+  Bridge: new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn0.iconfinder.com/data/icons/city-elements-flaticon/64/river-bridge-architecture_and_city-architectonic-engineering-buildings-landscape-256.png',
+      scale: 0.1,
+      opacity: 1,
+    }))
+  }),
+
+  others: new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn0.iconfinder.com/data/icons/twitter-23/512/157_Twitter_Location_Map-256.png',
+      scale: 0.1,
+      opacity: 1,
+    }))
+  }),
+}
+
+  var markerImage = new ol.style.Style({
+    image: new ol.style.Icon(({
+      crossOrigin: 'anonymous',
+      src: 'https://cdn0.iconfinder.com/data/icons/small-n-flat/24/678111-map-marker-256.png',
+       scale: 0.1,
+       opacity: 1,
+    }))
+  });
+
+  var pointImage1 = new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 10,
+      fill: new ol.style.Fill({
+        color: 'rgba(0,250,0,0.7)'
+      }),
+      stroke: new ol.style.Stroke({
+        color: 'blue'
+      })
+    })
+  });
+
+  var pointImage2 = new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 10,
+      fill: new ol.style.Fill({
+        color: 'rgba(250,250,0,0.7)'
+      }),
+      stroke: new ol.style.Stroke({
+        color: 'red'
+      })
+    })
+  });
+
+  var clusterFill = new ol.style.Fill({
+    color: 'rgba(255, 153, 0, 0.8)'
+  });
+  var clusterStroke = new ol.style.Stroke({
+    color: 'rgba(255, 204, 0, 0.2)',
+    width: 1
+  });
+  var textFill = new ol.style.Fill({
+    color: '#fff'
+  });
+  var textStroke = new ol.style.Stroke({
+    color: 'rgba(0, 0, 0, 0.6)',
+    width: 3
+  });
+  var invisibleFill = new ol.style.Fill({
+    color: 'rgba(255, 255, 255, 0.01)'
+  });
+
+  var maxFeatureCount;
+  var calculateClusterInfo = function(resolution) {
+    maxFeatureCount = 0;
+    var features = householdLayer.getSource().getFeatures();
+    var feature, radius;
+    for (var i = features.length - 1; i >= 0; --i) {
+      feature = features[i];
+      var originalFeatures = feature.get('features');
+      var extent = ol.extent.createEmpty();
+      var j = (void 0), jj = (void 0);
+      for (j = 0, jj = originalFeatures.length; j < jj; ++j) {
+        ol.extent.extend(extent, originalFeatures[j].getGeometry().getExtent());
+      }
+      maxFeatureCount = Math.max(maxFeatureCount, jj);
+      radius = 0.15 * (ol.extent.getWidth(extent) + ol.extent.getHeight(extent)) / resolution;
+      feature.set('radius', radius);
+    }
+  };
+
+  var currentResolution;
+  var translations = {};
+  function styleFunction(feature, resolution) {
+    if (resolution != currentResolution) {
+      calculateClusterInfo(resolution);
+      currentResolution = resolution;
+    }
+    var style;
+    var size = feature.get('features').length;
+    if (size > 5) {
+      style = new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: feature.get('radius'),
+          fill: new ol.style.Fill({
+            color: [255, 153, 0, Math.min(0.8, 0.4 + (size / maxFeatureCount))]
+          })
+        }),
+        text: new ol.style.Text({
+          text: size.toString(),
+          fill: textFill,
+          stroke: textStroke
+        })
+      });
+    } else {
+      var originalFeature = feature.get('features')[0];
+      style = markerImage;
+    }
+    return style;
+  }
+
+  function selectStyleFunction(feature) {
+   var styles;
+   var originalFeatures = feature.get('features');
+   if (typeof originalFeatures !== 'undefined') {
+     styles = [new ol.style.Style({
+       image: new ol.style.Circle({
+         radius: feature.get('radius'),
+         fill: invisibleFill
+       })
+     })];
+     for (var i = originalFeatures.length - 1; i >= 0; --i) {
+       if (originalFeatures[i].getProperties().Service != null){
+         styles.push(markserStyles[originalFeatures[i].getProperties().Service])
+       }
+       else{
+         styles.push(markerImage);
+       }
+     }
+     return styles;
+    }
+   return pointImage2;
+ }
+
+   var services = ["School", "Temple", "Church", "other", "Mobile_Tower", "Health_post", "Water_Tank", "transformer", "Agriculture_Pocket_Area", "City_hall", "Public_toilets", "Park", "Fish_Farming_Pond", "Shop", "Partikyshalaya", "Clinic", "Ward_office", "Bridge", "Monestery",
+   "Police_Post", "Army_Camp", "Campus", "Public_taps", "Ghuthi", "Post_office", "Residential_Area", "Flood_Prone", "Electricity_Office", "Rural Municipality Office",
+   "Commercial_Area", "Municipality_Office", "Cemetry", "Public_library", "Bank", "Bus_parks", "Cooperative_Finance", "Community", "Gaughar Clinic", "Ghat", "Conservation_Area", "Masjit", "Madarsa", "Public", "Hotel"];
+
+
+
+    // geojsonObject is data fetched from database
+
+    var geojsonObject = {
+      type: 'FeatureCollection',
+      crs: {
+        type: 'name',
+        properties: {
+          name: 'EPSG:4326'
+        }
+      },
+      features: [
+        households.each do |household|
+            {
+                type: 'Feature',
+                geometry: {
+                type: 'Point',
+                coordinates: household.get_coordinates //[85.4053, 27.8216]
+            },
+            properties: household.attributes.merge(
+            location: household.get_location,
+            total_pop: household.personals.length,
+            ward: household.ward.number
+            )
+        }
+      end
+      ]
+    }
+
     function getRoadName(feature) {
         var roadColors = {
             "A": "green",
@@ -54,6 +303,17 @@
         });
     }
 
+    var householdLayer = new ol.layer.Vector({
+     source: new ol.source.Cluster({
+       distance: 40,
+       source: new ol.source.Vector({
+       	features: new ol.format.GeoJSON().readFeatures(geojsonObject, { "featureProjection": "EPSG:3857"})
+       })
+     }),
+     style: styleFunction
+   });
+
+
     var placeNameLayer = new ol.layer.Vector({
         source: new ol.source.Vector({
             format: new ol.format.GeoJSON(),
@@ -70,9 +330,55 @@
         style: getRoadName
     });
 
+    // Populate Legend List
+    var legendList = []
+    var legend = $('.legend-list');
+    function getImage(feature){
+        var service = feature.getProperties().Service;
+        if (!legendList.includes(service)){
+        var imageUrl = images[service] === undefined ? images["others"] : images[service];
+        legend.append(`<li><img src=${imageUrl} alt="" height="15"> ${service} </li>`)
+        legendList.push(service);
+        }
+        if (Object.keys(markserStyles).includes(service)){
+        return markserStyles[service]
+        }else{
+        return markserStyles["others"]
+        }
+    }
+
+    var centerPosition = ol.proj.transform(<%= @center.to_json.html_safe %>, 'EPSG:4326', 'EPSG:3857');
+
+    var mapStyles = [
+        'Aerial',
+        'AerialWithLabels',
+        'Road',
+        'RoadOnDemand',
+        'collinsBart'
+        // 'ordnanceSurvey'
+    ];
+
+    var layersArray = [householdLayer, roadLayer, placeNameLayer];
+
+    var layers = layersArray;
+    var imagerySet = 'AerialWithLabels';
+    var i, ii;
+    for (i = 0, ii = mapStyles.length; i < ii; ++i) {
+        layers.push(
+        new ol.layer.Tile({
+        visible: false,
+        preload: Infinity,
+        source: new ol.source.BingMaps({
+            key: 'AqQxgB24yjOU44S6r_Rp6fcHbCxjeieOvKAG_KuMR2D8KXz7JW0AnqDxLtJCWg1s',
+            imagerySet: mapStyles[i]
+        })
+        }),
+    );
+    }
+
     var centerPosition = ol.proj.transform([123.0, 123.0], 'EPSG:4326', 'EPSG:3857');
     var map = new ol.Map({
-        layers: [placeNameLayer, roadLayer],
+        layers: layers,
         controls: ol.control.defaults({
             // attribution: false,
             // attributionOptions: ({ collapsible: false }),
@@ -87,4 +393,81 @@
             zoom: 13
         })
     });
+
+      // POPUP
+  var container = document.getElementById('popup'),
+  	content_element = document.getElementById('popup-content'),
+  	closer = document.getElementById('popup-closer');
+
+  closer.onclick = function() {
+  	overlay.setPosition(undefined);
+  	closer.blur();
+  	return false;
+  };
+  var overlay = new ol.Overlay({
+    element: container,
+    autoPan: true,
+    offset: [0, 0]
+  });
+  map.addOverlay(overlay);
+
+  featureSelect.on('select', function(e) {
+
+    var feature = e.target.getFeatures().array_[0];
+    if (feature.get('features') != undefined){
+      feature = feature.get('features')[0]
+    }
+    var coord = feature.getGeometry().getCoordinates();
+    var properties = feature.values_;
+    content = "<p class = 'small m-0' >"
+    for (key in properties){
+      content += `<strong>${key}</strong>: ${properties[key]}<br>`
+    }
+    content += '</p>'
+
+    popupContent = "<p class = 'small m-0' >"
+    popupContent += feature.get("hh_head_name") || feature.get("Name");
+    popupContent += '</p>'
+
+    content_element.innerHTML = popupContent;
+    overlay.setPosition(coord);
+    $('#ward').html(content);
+    $('#hh_head_name').html("<%= description_of('hh_head_name') %>: " + feature.get('hh_head_name'));
+    $('#house_photo').show();
+    $('#house_photo').attr("src",`/images/${feature.get('house_photo').replace("\\","\/")}`);
+    $('#location').html(feature.get('location'));
+    $('#details').attr("href",`/households/${feature.get('id')}`);
+    $('#details').show();
+  });
+
+  // Select map type
+  var select = document.getElementById('layer-select');
+  function onChange() {
+    var style = select.value;
+    for (var i = 1, ii = layers.length; i < ii; ++i) {
+      if (mapStyles[i-7] === style){
+        layers[i].setVisible(true);
+      }
+      else{
+        layers[i].setVisible(false);
+      }
+    }
+    householdLayer.setVisible(true);
+    wardBoundaryLayer.setVisible(true);
+    institutionLayer.setVisible(true);
+
+    householdLayer.setZIndex(2);
+    serviceLayer.setZIndex(2);
+    roadLayer.setZIndex(2);
+    wardBoundaryLayer.setZIndex(1);
+    landUseLayer.setZIndex(1);
+    placeNameLayer.setZIndex(1);
+    institutionLayer.setZIndex(1);
+  }
+  select.addEventListener('change', onChange);
+  onChange();
+
+  function updateLayers(element){
+    layersArray[element.value].setVisible(element.checked);
+  }
 </script>
